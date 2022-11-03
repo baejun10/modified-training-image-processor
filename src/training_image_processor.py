@@ -4,9 +4,14 @@ from pygame_gui.elements.ui_button import UIButton
 from pygame_gui.windows.ui_file_dialog import UIFileDialog
 import pygame_gui
 import pygame
+import pygame.locals
+import pygame as pg
+from tkinter import *
+from tkinter import messagebox
 import os
 import shutil
 
+pygame.init()
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
 
@@ -53,6 +58,52 @@ class SelectionBox:
         return rect
 
 
+class InputBox:
+
+    def __init__(self, x, y, w, h, text=''):
+        self.TEXT_COLOR_ACTIVE = 'grey'
+        self.TEXT_COLOR_INACTIVE = 'grey50'
+        self.rect = pg.Rect(x, y, w, h)
+        self.color = COLOR_INACTIVE
+        self.text_color = COLOR_INACTIVE
+        self.text = text
+        self.txt_surface = FONT.render(text, True, self.color)
+        self.active = False
+
+    def handle_event(self, event):
+        if event.type == pg.MOUSEBUTTONDOWN:
+            # If the user clicked on the input_box rect.
+            if self.rect.collidepoint(event.pos):
+                # Toggle the active variable.
+                self.active = not self.active
+            else:
+                self.active = False
+            # Change the current color of the input box.
+            self.color = COLOR_ACTIVE if self.active else COLOR_INACTIVE
+        self.text_color = self.TEXT_COLOR_ACTIVE if self.active else self.TEXT_COLOR_INACTIVE
+        if event.type == pg.KEYDOWN:
+            if self.active:
+                if event.key == pg.K_RETURN:
+                    print(self.text)
+                elif event.key == pg.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+                # Re-render the text.
+        self.txt_surface = FONT.render(self.text, True, self.text_color)
+
+    def update(self):
+        # Resize the box if the text is too long.
+        width = max(200, self.txt_surface.get_width()+10)
+        self.rect.w = width
+
+    def draw(self, screen):
+        # Blit the text.
+        screen.blit(self.txt_surface, (self.rect.x+5, self.rect.y+1))
+        # Blit the rect.
+        pg.draw.rect(screen, self.color, self.rect, 2)
+
+
 def ProcessedImage():
     rect = selection_box.image_rect()
     pimage = pygame.Surface((rect.width, rect.height))
@@ -61,8 +112,10 @@ def ProcessedImage():
     pimage = pygame.transform.smoothscale(pimage, (512, 512))
     return pimage
 
+# add image repeat feature when press ctrl
 
-def ClickImage():
+
+def ClickImage(repeat=False):
     processed_image = ProcessedImage()
     output_path = os.path.join(open_folder, 'outputs')
     originals_path = os.path.join(open_folder, 'originals')
@@ -76,11 +129,36 @@ def ClickImage():
     except FileExistsError:
         pass
 
-    pygame.image.save(processed_image, os.path.join(output_path, files[0]))
-    shutil.move(os.path.join(open_folder, files[0]), os.path.join(
-        originals_path, files[0]))
-    files.pop(0)
-    LoadImage()
+    #output_name = os.path.join(output_path, files[0])
+    # change output file name from filename to image_namebox
+    t_len = len(image_namebox.text)
+
+    # cut extension name like .png
+    for i in range(0, t_len):
+        if (image_namebox.text[i] == '.'):
+            image_namebox.text = image_namebox.text[0:i-1]
+
+    output_name = os.path.join(output_path, image_namebox.text+'.png')
+    if not os.path.exists(output_name):
+        pygame.image.save(processed_image, output_name)
+    else:
+        saved = False
+        suffix = 1
+        while not saved:
+            output_name_new = os.path.join(
+                output_path, image_namebox.text + '_' + str(suffix) + '.png')
+            if not os.path.exists(output_name_new):
+                pygame.image.save(processed_image, output_name_new)
+                print(output_name_new)
+                saved = True
+                break
+            suffix += 1
+    # skip move, pop and load image to repeat
+    if (not repeat):
+        shutil.move(os.path.join(open_folder, files[0]), os.path.join(
+            originals_path, files[0]))
+        files.pop(0)
+        LoadImage()
 
 
 class ScrollHandler:
@@ -102,7 +180,7 @@ class ScrollHandler:
             scroll_y -= 1
         self.y = scroll_y
         self.frames_scrolled += 1.5
-        print(scroll_y)
+        # print(scroll_y)
         self.rate += pow(self.frames_scrolled, 2) * scroll_y * (1/3)
         return self.rate
 
@@ -113,6 +191,11 @@ def clamp(x, _min, _max):
 
 # Initialize program
 pygame.init()
+#FONT = pg.font.Font(None, 25)
+FONT = pygame.font.SysFont('Arial', 17)
+COLOR_INACTIVE = pg.Color('grey25')
+COLOR_ACTIVE = pg.Color('white')
+
 if not pygame.image.get_extended():
     print("Warning: You are using a version of pygame with limited image format support.")
 project_folder = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -120,6 +203,8 @@ icon = pygame.image.load(os.path.join(
     project_folder, "assets", "emblem-photos-symbolic.svg"))
 pygame.display.set_icon(icon)
 screen = pygame.display.set_mode((800, 600), pygame.RESIZABLE)
+screen_center = [pygame.Surface.get_width(
+    screen) // 2, pygame.Surface.get_height(screen) // 2]
 pygame.display.set_caption('Training Image Processor')
 manager = pygame_gui.UIManager((800, 600))
 clock = pygame.time.Clock()
@@ -167,6 +252,14 @@ flipv_icon = pygame.image.load(os.path.join(
 flipv_button_image = UIImage(Rect(ui_row_height*3, ui_row_height,
                              ui_row_height, ui_row_height).inflate(-8, -8), flipv_icon, manager)
 
+next_button = UIButton(Rect(ui_row_height*4, ui_row_height,
+                       ui_row_height, ui_row_height), text='', manager=manager)
+next_icon = pygame.image.load(os.path.join(
+    project_folder, 'assets', 'go-next-symbolic.svg'))
+next_button_image = UIImage(Rect(ui_row_height*4, ui_row_height,
+                            ui_row_height, ui_row_height).inflate(-8, -8), next_icon, manager)
+
+image_namebox = InputBox(ui_row_height*6, ui_row_height, 140, 25, 'filename')
 image_rect = Rect(0, ui_bar_height, 800, 600-ui_bar_height)
 image_button = UIButton(image_rect, '', manager)
 placeholder_image = pygame.Surface((1, 1))
@@ -219,11 +312,17 @@ def LoadImage():
                 ScaleImage()
                 selection_box.size = min(scaled_image.get_size())
                 loaded = True
+                image_button.show()
             except pygame.error as e:
                 if str(e) != "Unsupported image format":
                     raise Exception().with_traceback(e.__traceback__)
                 files.pop(0)
         else:
+            image = None
+            image_element.set_image(placeholder_image)
+            image_button.hide()
+            Tk().wm_withdraw()
+            messagebox.showinfo('End of image', 'OK')
             break
 
 
@@ -231,9 +330,16 @@ def Draw():
     manager.update(time_delta)
     screen.fill((0, 0, 0))
     manager.draw_ui(screen)
+    image_namebox.update()
+    image_namebox.draw(screen)
     if image:
         selection_box.draw()
     pygame.display.update()
+
+
+def ScreenCenter():
+    screen_center = [pygame.Surface.get_width(
+        screen) // 2, pygame.Surface.get_height(screen) // 2]
 
 
 folder_selection = FolderSelection()
@@ -244,12 +350,11 @@ open_folder = ""
 while True:
     time_delta = clock.tick(60) / 1000.0
     scroll_handler.start_frame()
-
+    ScreenCenter()
     # Process events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             quit()
-
         elif event.type == pygame.VIDEORESIZE:
             # Resize UI Elements
             w, h = pygame.display.get_surface().get_size()
@@ -297,12 +402,23 @@ while True:
                     ScaleImage()
             elif event.ui_element == image_button:
                 # print('click')
-                ClickImage()
+                repeat = False
+                all_keys = pygame.key.get_pressed()
+                # repeat when press ctrl or r key
+                if all_keys[pygame.K_LCTRL] or all_keys[pygame.K_r]:
+                    repeat = True
+                if files and image:
+                    ClickImage(repeat)
+            elif event.ui_element == next_button:
+                if files:
+                    files.pop(0)
+                    LoadImage()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-            files.pop(0)
-            LoadImage()
+            if files:
+                files.pop(0)
+                LoadImage()
         elif event.type == pygame.MOUSEMOTION:
-            if image:
+            if image and len(files) > 0:
                 selection_box.location[0] = event.pos[0]
                 selection_box.location[1] = event.pos[1]
                 image_rect = Rect((0, ui_bar_height), scaled_image.get_size())
@@ -318,7 +434,7 @@ while True:
                 selection_box.location[1] = pos[1]
                 image_rect = Rect((0, ui_bar_height), (w, h))
                 selection_box.clamp(image_rect)
-
+        image_namebox.handle_event(event)
         manager.process_events(event)
 
     Draw()
