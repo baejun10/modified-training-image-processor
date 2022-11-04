@@ -329,9 +329,9 @@ def LoadImage():
 def Draw():
     manager.update(time_delta)
     screen.fill((0, 0, 0))
-    manager.draw_ui(screen)
     image_namebox.update()
-    image_namebox.draw(screen)
+    image_namebox.draw(screen) #image filename box is under of the folder window
+    manager.draw_ui(screen)
     if image:
         selection_box.draw()
     pygame.display.update()
