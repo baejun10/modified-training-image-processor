@@ -10,6 +10,7 @@ from tkinter import *
 from tkinter import messagebox
 import os
 import shutil
+import time
 
 pygame.init()
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -153,6 +154,7 @@ def ClickImage(repeat=False):
                 saved = True
                 break
             suffix += 1
+    save_notifier.notify_saving()
     # skip move, pop and load image to repeat
     if (not repeat):
         shutil.move(os.path.join(open_folder, files[0]), os.path.join(
@@ -189,6 +191,36 @@ def clamp(x, _min, _max):
     return max(min(x, _max), _min)
 
 
+class Save_Notifier:
+    def __init__(self) -> None:
+        self.color = pg.Color('green4')
+        self.notify_rect = image_rect
+        self.notify_rect.width = 3
+        self.notify_duration_sec = 0.25
+        self.stime = 0
+        self.on = False
+
+    def notify_saving(self):
+        self.stime = time.time()
+        self.on = True
+        self.color = pg.Color('yellow3')
+
+    def notify_default(self):
+        if self.on:
+            time_delta = time.time() - self.stime
+            if (time_delta > self.notify_duration_sec):
+                self.color = pg.Color('green4')
+                self.stime = 0
+                self.on = False
+
+    def draw_notify(self):
+        pg.draw.rect(screen, self.color, self.notify_rect, 10)
+
+    def scale_notify(self, image_rect):
+        self.notify_rect = image_rect
+        pg.Rect.inflate_ip(self.notify_rect, 10, 10)
+
+
 # Initialize program
 pygame.init()
 #FONT = pg.font.Font(None, 25)
@@ -198,6 +230,7 @@ COLOR_ACTIVE = pg.Color('white')
 
 if not pygame.image.get_extended():
     print("Warning: You are using a version of pygame with limited image format support.")
+originals_path = ""
 project_folder = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 icon = pygame.image.load(os.path.join(
     project_folder, "assets", "emblem-photos-symbolic.svg"))
@@ -214,6 +247,7 @@ scaled_image = None
 scroll_handler = ScrollHandler()
 ui_row_height = 25
 ui_bar_height = 50
+img_x = 15  # img x coordinate
 
 # Initialize UI elements
 button_rect = Rect(0, 0, 150, ui_bar_height)
@@ -260,13 +294,15 @@ next_button_image = UIImage(Rect(ui_row_height*4, ui_row_height,
                             ui_row_height, ui_row_height).inflate(-8, -8), next_icon, manager)
 
 image_namebox = InputBox(ui_row_height*6, ui_row_height, 140, 25, 'filename')
-image_rect = Rect(0, ui_bar_height, 800, 600-ui_bar_height)
+image_rect = Rect(img_x, ui_bar_height, 800, 600-ui_bar_height)
 image_button = UIButton(image_rect, '', manager)
 placeholder_image = pygame.Surface((1, 1))
 placeholder_image.fill((0, 0, 0))
 image_element = UIImage(image_rect, placeholder_image, manager)
 
+repeat = False
 selection_box = SelectionBox()
+save_notifier = Save_Notifier()
 
 
 def FolderSelection():
@@ -296,9 +332,10 @@ def ScaleImage():
     global scaled_image
     scaled_image = pygame.transform.smoothscale(image, scaled_size)
     image_element.set_image(scaled_image)
-    image_rect = Rect((0, ui_bar_height), scaled_size)
+    image_rect = Rect((img_x, ui_bar_height), scaled_size)
     image_button.set_dimensions(image_rect.size)
     image_element.set_dimensions(image_rect.size)
+    save_notifier.scale_notify(image_rect)
 
 
 def LoadImage():
@@ -330,10 +367,13 @@ def Draw():
     manager.update(time_delta)
     screen.fill((0, 0, 0))
     image_namebox.update()
-    image_namebox.draw(screen) #image filename box is under of the folder window
+    # image filename box is under of the folder window
+    save_notifier.notify_default()
+    image_namebox.draw(screen)
     manager.draw_ui(screen)
     if image:
         selection_box.draw()
+        save_notifier.draw_notify()
     pygame.display.update()
 
 
@@ -415,13 +455,18 @@ while True:
                     LoadImage()
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             if files:
+                if repeat:  # if repeated image mv to original folder
+                    shutil.move(os.path.join(open_folder, files[0]), os.path.join(
+                        originals_path, files[0]))
+                    repeat = False
                 files.pop(0)
                 LoadImage()
         elif event.type == pygame.MOUSEMOTION:
             if image and len(files) > 0:
                 selection_box.location[0] = event.pos[0]
                 selection_box.location[1] = event.pos[1]
-                image_rect = Rect((0, ui_bar_height), scaled_image.get_size())
+                image_rect = Rect((img_x, ui_bar_height),
+                                  scaled_image.get_size())
                 selection_box.clamp(image_rect)
 
         elif event.type == pygame.MOUSEWHEEL:
@@ -432,7 +477,7 @@ while True:
                     selection_box.size + scroll_handler.scroll(event.y), 100, max(w, h))
                 selection_box.location[0] = pos[0]
                 selection_box.location[1] = pos[1]
-                image_rect = Rect((0, ui_bar_height), (w, h))
+                image_rect = Rect((img_x, ui_bar_height), (w, h))
                 selection_box.clamp(image_rect)
         image_namebox.handle_event(event)
         manager.process_events(event)
