@@ -19,7 +19,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 class SelectionBox:
     def __init__(self):
         self.location = [0, 0]
-        self.size = 512
+        self.size = image_res
 
     def draw(self):
         s = self.size/2
@@ -110,7 +110,7 @@ def ProcessedImage():
     pimage = pygame.Surface((rect.width, rect.height))
     global image
     pimage.blit(image, (0, 0), area=rect)
-    pimage = pygame.transform.smoothscale(pimage, (512, 512))
+    pimage = pygame.transform.smoothscale(pimage, (image_res, image_res))
     return pimage
 
 # add image repeat feature when press ctrl
@@ -214,11 +214,11 @@ class Save_Notifier:
                 self.on = False
 
     def draw_notify(self):
-        pg.draw.rect(screen, self.color, self.notify_rect, 10)
+        pg.draw.rect(screen, self.color, self.notify_rect, 5)
 
     def scale_notify(self, image_rect):
         self.notify_rect = image_rect
-        pg.Rect.inflate_ip(self.notify_rect, 10, 10)
+        pg.Rect.inflate_ip(self.notify_rect, 5, 5)
 
 
 # Initialize program
@@ -244,6 +244,8 @@ clock = pygame.time.Clock()
 files = []
 image = None
 scaled_image = None
+global image_res
+image_res = 768
 scroll_handler = ScrollHandler()
 ui_row_height = 25
 ui_bar_height = 50
@@ -294,6 +296,7 @@ next_button_image = UIImage(Rect(ui_row_height*4, ui_row_height,
                             ui_row_height, ui_row_height).inflate(-8, -8), next_icon, manager)
 
 image_namebox = InputBox(ui_row_height*6, ui_row_height, 140, 25, 'filename')
+#image_resbox = InputBox(ui_row_height*9, ui_row_height, 65, 25, '512')
 image_rect = Rect(img_x, ui_bar_height, 800, 600-ui_bar_height)
 image_button = UIButton(image_rect, '', manager)
 placeholder_image = pygame.Surface((1, 1))
@@ -415,6 +418,7 @@ while True:
                 open_folder = folder_selection.current_directory_path
                 files = [f for f in os.listdir(open_folder) if os.path.isfile(
                     os.path.join(open_folder, f))]
+                print(files)
                 folder_selection.hide()
                 LoadImage()
             elif event.ui_element == folder_selection.parent_directory_button:
@@ -456,6 +460,7 @@ while True:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             if files:
                 if repeat:  # if repeated image mv to original folder
+                    originals_path = os.path.join(open_folder, 'originals')
                     shutil.move(os.path.join(open_folder, files[0]), os.path.join(
                         originals_path, files[0]))
                     repeat = False
@@ -473,8 +478,10 @@ while True:
             if image:
                 pos = pygame.mouse.get_pos()
                 w, h = scaled_image.get_size()
+                scale = image.get_size()[0]/scaled_image.get_size()[0]
+                min_box_size = image_res/scale
                 selection_box.size = clamp(
-                    selection_box.size + scroll_handler.scroll(event.y), 100, max(w, h))
+                    selection_box.size + scroll_handler.scroll(event.y), min_box_size, max(w, h))
                 selection_box.location[0] = pos[0]
                 selection_box.location[1] = pos[1]
                 image_rect = Rect((img_x, ui_bar_height), (w, h))

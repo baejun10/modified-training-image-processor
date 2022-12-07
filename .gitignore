@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 #image files
 image/
+image_old/
 # C extensions
 *.so
 
